@@ -1,0 +1,94 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "4.54.0"
+    }
+  }
+}
+
+provider "azurerm" {
+    subscription_id = "9318f5ba-4f84-45d0-b654-9de4c9875f0a"
+    client_id = "c490c805-f9ad-46a9-9c38-5635d3bc15f9"
+    client_secret = "Jgi8Q~qMKqd7f.Wj4sTKToOqJLNWDg3gAXmpCc.K"
+    tenant_id = "edb76449-7354-4c81-af20-0123d083eb8a"
+  features {}
+}
+
+
+
+
+resource "azurerm_resource_group" "myrg" {
+  name = "Dev-Rg"
+  location = "Central India"
+}
+
+resource "azurerm_virtual_network" "myvnet" {
+  name = "Dev-Vnet"
+  location = azurerm_resource_group.myrg.location
+  resource_group_name = azurerm_resource_group.myrg.name
+  address_space = ["10.0.0.0/16"]
+}
+
+resource "azurerm_subnet" "mysubnet" {
+  name = "Dev-Subnet"
+  resource_group_name = azurerm_resource_group.myrg.name
+  virtual_network_name = azurerm_virtual_network.myvnet.name
+  address_prefixes = ["10.0.1.0/24"]
+}
+
+resource "azurerm_public_ip" "mypubip" {
+  name = "Dev-PunIP"
+  location = azurerm_resource_group.myrg.location
+  resource_group_name = azurerm_resource_group.myrg.name
+  allocation_method = "Static"
+  sku = "Standard"
+}
+
+resource "azurerm_application_gateway" "appgw" {
+  name = "Dev-AppGW"
+  location = azurerm_resource_group.myrg.location
+  resource_group_name = azurerm_resource_group.myrg.name
+  sku {
+    name = "Standard_v2"
+    tier = "Standard_v2"
+    capacity = 2
+  }
+  gateway_ip_configuration {
+    name = "appgw-ipconfig"
+    subnet_id = azurerm_subnet.mysubnet.id
+    }
+  frontend_ip_configuration {
+    name = "aapgw-feip"
+    public_ip_address_id = azurerm_public_ip.mypubip.id
+    }
+  frontend_port {
+    name = "appgw-feport"
+    port = 80
+    }
+  backend_address_pool {
+    name = "appgw-bepool"
+    ip_addresses = ["10.0.2.4", "10.0.2.5"]
+    }
+  backend_http_settings {
+    name = "appgw-behttp"
+    cookie_based_affinity = "Disabled"
+    port = 80
+    protocol = "Http"
+    request_timeout = 20
+    }
+  http_listener {
+    name = "appgw-listner"
+    frontend_ip_configuration_name = "aapgw-feip"
+    frontend_port_name = "appgw-feport"
+    protocol = "Http"
+     }
+  request_routing_rule {
+    name = "appgw-rule"
+    rule_type = "Basic"
+    http_listener_name = "appgw-listner"
+    backend_address_pool_name = "appgw-bepool"
+    backend_http_settings_name = "appgw-behttp"
+    priority = 100
+    }
+}
